@@ -1,0 +1,7 @@
+[package]
+name = "future-limit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { verison = "1", features = ["sync", "rt"] }
