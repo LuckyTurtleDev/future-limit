@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 tokio = { verison = "1", features = ["sync", "rt"] }
+async-trait = "0.1"
