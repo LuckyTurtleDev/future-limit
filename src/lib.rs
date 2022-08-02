@@ -12,21 +12,26 @@ pub struct Limiter {
 }
 
 #[async_trait]
-trait ToName<F>
+pub trait LimitFuture<F>
 where
 	Self: Future,
 {
-	async fn limit(self, limits: &Vec<Limiter>) -> <Self as Future>::Output;
+	async fn limits(self, limits: &Vec<&Limiter>) -> <Self as Future>::Output;
+	async fn limit(self, limit: &Limiter) -> <Self as Future>::Output;
 }
 
 #[async_trait]
-impl<F> ToName<F> for F
+impl<F> LimitFuture<F> for F
 where
 	F: Future,
 	F: Send,
 	<Self as Future>::Output: Send,
 {
-	async fn limit(self, limits: &Vec<Limiter>) -> <Self as Future>::Output {
+	async fn limit(self, limit: &Limiter) -> <Self as Future>::Output {
+		self.limits(&vec![&limit]).await
+	}
+
+	async fn limits(self, limits: &Vec<&Limiter>) -> <Self as Future>::Output {
 		let states = loop {
 			//look all mutex at the same time
 			let mut mutexs = Vec::new();
