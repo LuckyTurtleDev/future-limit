@@ -33,22 +33,21 @@ where
 
 	async fn limits(self, limits: &Vec<&Limiter>) -> <Self as Future>::Output {
 		let states = loop {
-			//look all mutex at the same time
-			let mut mutexs = Vec::new();
-			for limit in limits {
-				match limit.state.try_lock() {
-					Err(_) => break,
-					Ok(state) => {
-						if limit.max_parallelism <= state.current_parallelism {
-							break;
-						}
-						mutexs.push(state)
-					},
+			let mut limits = limits.clone();
+			//sort mutexs by address to avoid deadlocks
+			limits.sort_by_key(|a| Arc::as_ptr(&a.state) as usize);
+			let mut mutexs = Vec::with_capacity(limits.len());
+			for limit in &limits {
+				let state = limit.state.lock().await;
+				if limit.max_parallelism <= state.current_parallelism {
+					break;
 				}
+				mutexs.push(state)
 			}
 			if mutexs.len() == limits.len() {
 				break mutexs;
 			}
+			drop(mutexs);
 			yield_now().await;
 		};
 		for mut state in states {
