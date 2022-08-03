@@ -1,9 +1,13 @@
 use async_trait::async_trait;
-use std::{future::Future, sync::Arc};
-use tokio::task::yield_now;
+use std::{
+	future::Future,
+	sync::Arc,
+	time::{Duration, Instant},
+};
+use tokio::{task::yield_now, time::sleep};
 
 mod limiter;
-use limiter::Limiter;
+use limiter::{CanRun, Limiter};
 
 #[async_trait]
 pub trait LimitFuture<F>
@@ -31,21 +35,30 @@ where
 			//sort mutexs by address to avoid deadlocks
 			limits.sort_by_key(|a| Arc::as_ptr(&a.state) as usize);
 			let mut mutexs = Vec::with_capacity(limits.len());
+			let mut duration = Duration::ZERO;
 			for limit in &limits {
-				let state = limit.state.lock().await;
-				if limit.max_parallelism.is_none() || state.current_parallelism < limit.max_parallelism.unwrap().into() {
-					break;
+				match limit.can_run().await {
+					CanRun::True(state) => mutexs.push(state),
+					CanRun::False(duration_) => {
+						duration = duration_;
+						break;
+					},
 				}
-				mutexs.push(state)
 			}
+			//check if all limiter were ready
 			if mutexs.len() == limits.len() {
 				break mutexs;
 			}
 			drop(mutexs);
-			yield_now().await;
+			if duration.is_zero() {
+				yield_now().await
+			} else {
+				sleep(duration).await;
+			}
 		};
 		for mut state in states {
 			state.current_parallelism += 1;
+			state.last_run = Instant::now().elapsed();
 			drop(state);
 		}
 		let return_value = self.await;

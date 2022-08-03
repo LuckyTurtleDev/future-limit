@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1", default-features = false, features = ["sync", "rt"] }
+tokio = { version = "1", default-features = false, features = ["sync", "rt", "time"] }
 async-trait = "0.1"
