@@ -1,15 +1,9 @@
 use async_trait::async_trait;
 use std::{future::Future, sync::Arc};
-use tokio::{sync::Mutex, task::yield_now};
+use tokio::task::yield_now;
 
-struct LimiterState {
-	current_parallelism: usize,
-}
-
-pub struct Limiter {
-	max_parallelism: usize,
-	state: Arc<Mutex<LimiterState>>,
-}
+mod limiter;
+use limiter::Limiter;
 
 #[async_trait]
 pub trait LimitFuture<F>
@@ -39,7 +33,7 @@ where
 			let mut mutexs = Vec::with_capacity(limits.len());
 			for limit in &limits {
 				let state = limit.state.lock().await;
-				if limit.max_parallelism <= state.current_parallelism {
+				if limit.max_parallelism.is_none() || state.current_parallelism < limit.max_parallelism.unwrap().into() {
 					break;
 				}
 				mutexs.push(state)
