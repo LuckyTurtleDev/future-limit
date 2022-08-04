@@ -56,6 +56,7 @@ where
 		for mut state in states {
 			state.current_parallelism += 1;
 			state.last_run = Instant::now();
+			state.delay_queued_task+=1;
 			drop(state);
 		}
 		let return_value = self.await;
@@ -63,6 +64,7 @@ where
 			let mut state = limit.state.lock().await;
 			state.current_parallelism = state.current_parallelism - 1;
 			limit.finish_noftiy.notify_one();
+			state.delay_queued_task=0;
 		}
 		return_value
 	}

@@ -8,6 +8,7 @@ use tokio::sync::{Mutex, Notify};
 pub(crate) struct State {
 	pub(crate) current_parallelism: usize,
 	pub(crate) last_run: Instant,
+	pub(crate) delay_queued_task: usize,
 }
 
 impl Default for State {
@@ -15,6 +16,7 @@ impl Default for State {
 		State {
 			current_parallelism: 0,
 			last_run: Instant::now(),
+			delay_queued_task: 0,
 		}
 	}
 }
@@ -64,7 +66,8 @@ impl Limiter {
 		let time_since_last_run = state.last_run.elapsed();
 		if time_since_last_run < self.delay {
 			can_run = false;
-			wait_duration = wait_duration.max(self.delay - time_since_last_run);
+			wait_duration =
+				wait_duration.max((self.delay - time_since_last_run) + state.delay_queued_task as u32 * self.delay);
 		}
 		if can_run {
 			return CanRun::True(state);
