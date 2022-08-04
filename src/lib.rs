@@ -6,7 +6,7 @@ use std::{
 };
 use tokio::{task::yield_now, time::sleep};
 
-mod limiter;
+pub mod limiter;
 use limiter::{CanRun, Limiter};
 
 #[async_trait]
@@ -58,7 +58,7 @@ where
 		};
 		for mut state in states {
 			state.current_parallelism += 1;
-			state.last_run = Instant::now().elapsed();
+			state.last_run = Instant::now();
 			drop(state);
 		}
 		let return_value = self.await;

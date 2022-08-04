@@ -7,14 +7,14 @@ use tokio::sync::Mutex;
 
 pub(crate) struct State {
 	pub(crate) current_parallelism: usize,
-	pub(crate) last_run: Duration,
+	pub(crate) last_run: Instant,
 }
 
 impl Default for State {
 	fn default() -> Self {
 		State {
 			current_parallelism: 0,
-			last_run: Duration::ZERO,
+			last_run: Instant::now(),
 		}
 	}
 }
@@ -48,18 +48,20 @@ impl Limiter {
 	pub(crate) async fn can_run(&self) -> CanRun {
 		let state = self.state.lock().await;
 		let mut can_run = true;
-		let mut duration = Duration::ZERO;
-		let current_time = Instant::now().elapsed();
-		if current_time - state.last_run < self.delay {
+		let mut wait_duration = Duration::ZERO;
+		let time_since_last_run = state.last_run.elapsed();
+		if time_since_last_run < self.delay {
 			can_run = false;
-			duration = duration.max(self.delay - (current_time - state.last_run));
+			wait_duration = wait_duration.max(self.delay - time_since_last_run);
 		}
-		if self.max_parallelism.is_none() || state.current_parallelism < self.max_parallelism.unwrap().into() {
-			can_run = false
+		if let Some(max) = self.max_parallelism {
+			if state.current_parallelism >= max.into() {
+				can_run = false
+			}
 		};
 		if can_run {
 			return CanRun::True(state);
 		}
-		CanRun::False(duration)
+		CanRun::False(wait_duration)
 	}
 }
