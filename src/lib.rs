@@ -1,10 +1,6 @@
 use async_trait::async_trait;
-use std::{
-	future::Future,
-	sync::Arc,
-	time::{Duration, Instant},
-};
-use tokio::{task::yield_now, time::sleep};
+use std::{future::Future, sync::Arc, time::Instant};
+use tokio::time::sleep;
 
 pub mod limiter;
 use limiter::{CanRun, Limiter, YieldStrategie};
