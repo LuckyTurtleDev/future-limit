@@ -7,7 +7,7 @@ use std::{
 use tokio::{task::yield_now, time::sleep};
 
 pub mod limiter;
-use limiter::{CanRun, Limiter};
+use limiter::{CanRun, Limiter, YieldStrategie};
 
 #[async_trait]
 pub trait LimitFuture<F>
@@ -35,25 +35,26 @@ where
 			//sort mutexs by address to avoid deadlocks
 			limits.sort_by_key(|a| Arc::as_ptr(&a.state) as usize);
 			let mut mutexs = Vec::with_capacity(limits.len());
-			let mut duration = Duration::ZERO;
+			let mut yield_strategie = None;
 			for limit in &limits {
 				match limit.can_run().await {
 					CanRun::True(state) => mutexs.push(state),
-					CanRun::False(duration_) => {
-						duration = duration_;
+					CanRun::False(strategie) => {
+						yield_strategie = Some(strategie);
 						break;
 					},
 				}
 			}
 			//check if all limiter were ready
-			if mutexs.len() == limits.len() {
-				break mutexs;
-			}
-			drop(mutexs);
-			if duration.is_zero() {
-				yield_now().await
-			} else {
-				sleep(duration).await;
+			match yield_strategie {
+				None => break mutexs,
+				Some(strategie) => {
+					drop(mutexs);
+					match strategie {
+						YieldStrategie::Duration(duration) => sleep(duration).await,
+						YieldStrategie::Notify(notify) => notify.notified().await,
+					}
+				},
 			}
 		};
 		for mut state in states {
@@ -65,6 +66,7 @@ where
 		for limit in limits {
 			let mut state = limit.state.lock().await;
 			state.current_parallelism = state.current_parallelism - 1;
+			limit.finish_noftiy.notify_one();
 		}
 		return_value
 	}

@@ -3,7 +3,7 @@ use std::{
 	sync::Arc,
 	time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 
 pub(crate) struct State {
 	pub(crate) current_parallelism: usize,
@@ -21,6 +21,7 @@ impl Default for State {
 
 pub struct Limiter {
 	pub max_parallelism: Option<NonZeroUsize>,
+	pub(crate) finish_noftiy: Arc<Notify>,
 	pub delay: Duration,
 	pub(crate) state: Arc<Mutex<State>>,
 }
@@ -29,15 +30,21 @@ impl Default for Limiter {
 	fn default() -> Self {
 		Limiter {
 			max_parallelism: None,
+			finish_noftiy: Arc::new(Notify::new()),
 			delay: Duration::default(),
 			state: Arc::new(Mutex::new(State::default())),
 		}
 	}
 }
 
+pub(crate) enum YieldStrategie<'a> {
+	Duration(Duration),
+	Notify(&'a Arc<Notify>),
+}
+
 pub(crate) enum CanRun<'a> {
 	r#True(tokio::sync::MutexGuard<'a, State>),
-	r#False(Duration),
+	False(YieldStrategie<'a>),
 }
 
 impl Limiter {
@@ -47,6 +54,11 @@ impl Limiter {
 
 	pub(crate) async fn can_run(&self) -> CanRun {
 		let state = self.state.lock().await;
+		if let Some(max) = self.max_parallelism {
+			if state.current_parallelism >= max.into() {
+				return CanRun::False(YieldStrategie::Notify(&self.finish_noftiy));
+			}
+		};
 		let mut can_run = true;
 		let mut wait_duration = Duration::ZERO;
 		let time_since_last_run = state.last_run.elapsed();
@@ -54,14 +66,9 @@ impl Limiter {
 			can_run = false;
 			wait_duration = wait_duration.max(self.delay - time_since_last_run);
 		}
-		if let Some(max) = self.max_parallelism {
-			if state.current_parallelism >= max.into() {
-				can_run = false
-			}
-		};
 		if can_run {
 			return CanRun::True(state);
 		}
-		CanRun::False(wait_duration)
+		CanRun::False(YieldStrategie::Duration(wait_duration))
 	}
 }
