@@ -128,3 +128,40 @@ impl Limiter {
 		CanRun::False(YieldStrategie::Duration(wait_duration))
 	}
 }
+
+//###########################################  Tests  #############################################
+#[cfg(test)]
+async fn can_run_task_per_interval(
+	runnig_task_count: usize,
+	interval: Duration,
+	interval_start: Option<Instant>,
+	should_run: bool,
+) -> () {
+	let rule = TasksPerInterval::new(NonZeroUsize::new(10).unwrap(), interval);
+	rule.state.lock().await.interval_start = interval_start;
+	rule.state.lock().await.task_count = runnig_task_count;
+	let mut limit = Limiter::new();
+	limit.tasks_per_intervals.push(rule);
+	let can_run = match limit.can_run().await {
+		CanRun::False(_) => false,
+		CanRun::True(_) => true,
+	};
+	assert_eq!(can_run, should_run);
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn can_run_task_per_interval_1() -> () {
+	can_run_task_per_interval(5, Duration::from_secs(1000), Some(Instant::now()), true).await;
+}
+#[cfg(test)]
+#[tokio::test]
+async fn can_run_task_per_interval_2() -> () {
+	can_run_task_per_interval(10, Duration::from_secs(1000), Some(Instant::now()), false).await;
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn can_run_task_per_interval_3() -> () {
+	can_run_task_per_interval(10, Duration::from_secs(1000), None, false).await;
+}
