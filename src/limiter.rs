@@ -21,11 +21,44 @@ impl Default for State {
 	}
 }
 
+pub(crate) struct StateTasksPerInterval {
+	pub(crate) task_count: usize,
+	pub(crate) queued_task: usize,
+	pub(crate) interval_start: Option<Instant>,
+}
+
+impl StateTasksPerInterval {
+	fn new() -> Self {
+		Self {
+			task_count: 0,
+			queued_task: 0,
+			interval_start: None,
+		}
+	}
+}
+
+pub struct TasksPerInterval {
+	pub task_count: NonZeroUsize,
+	pub interval: Duration,
+	pub(crate) state: Arc<Mutex<StateTasksPerInterval>>,
+}
+
+impl TasksPerInterval {
+	pub fn new(task_count: NonZeroUsize, interval: Duration) -> Self {
+		Self {
+			task_count,
+			interval,
+			state: Arc::new(Mutex::new(StateTasksPerInterval::new())),
+		}
+	}
+}
+
 pub struct Limiter {
 	pub max_parallelism: Option<NonZeroUsize>,
 	pub(crate) finish_noftiy: Arc<Notify>,
 	pub delay: Duration,
 	pub(crate) state: Arc<Mutex<State>>,
+	pub(crate) tasks_per_intervals: Vec<TasksPerInterval>,
 }
 
 impl Default for Limiter {
@@ -35,6 +68,7 @@ impl Default for Limiter {
 			finish_noftiy: Arc::new(Notify::new()),
 			delay: Duration::default(),
 			state: Arc::new(Mutex::new(State::default())),
+			tasks_per_intervals: Vec::new(),
 		}
 	}
 }
@@ -68,6 +102,25 @@ impl Limiter {
 			can_run = false;
 			wait_duration =
 				wait_duration.max((self.delay - time_since_last_run) + state.delay_queued_task as u32 * self.delay);
+		}
+		for task_per_interval in &self.tasks_per_intervals {
+			let mut state = task_per_interval.state.lock().await;
+			if let Some(interval_start) = state.interval_start {
+				let time_since_interval_start = interval_start.elapsed();
+				if time_since_interval_start > task_per_interval.interval {
+					// reset state if interval is over
+					state.interval_start = None;
+					state.task_count = 0;
+				} else {
+					if state.task_count >= task_per_interval.task_count.into() {
+						can_run = false;
+						wait_duration = wait_duration.max(
+							task_per_interval.interval - time_since_interval_start
+								+ ((state.queued_task / task_per_interval.task_count) as u32 * task_per_interval.interval),
+						);
+					}
+				}
+			}
 		}
 		if can_run {
 			return CanRun::True(state);
