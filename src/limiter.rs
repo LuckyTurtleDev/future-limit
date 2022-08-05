@@ -58,7 +58,7 @@ pub struct Limiter {
 	pub(crate) finish_noftiy: Arc<Notify>,
 	pub delay: Duration,
 	pub(crate) state: Arc<Mutex<State>>,
-	pub(crate) tasks_per_intervals: Vec<TasksPerInterval>,
+	pub tasks_per_intervals: Vec<TasksPerInterval>,
 }
 
 impl Default for Limiter {

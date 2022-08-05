@@ -5,6 +5,9 @@ use tokio::time::sleep;
 pub mod limiter;
 use limiter::{CanRun, Limiter, YieldStrategie};
 
+#[cfg(test)]
+mod test;
+
 #[async_trait]
 pub trait LimitFuture<F>
 where
