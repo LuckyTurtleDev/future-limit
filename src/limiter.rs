@@ -91,7 +91,7 @@ impl Limiter {
 	pub(crate) async fn can_run(&self) -> CanRun {
 		let state = self.state.lock().await;
 		if let Some(max) = self.max_parallelism {
-			if state.current_parallelism >= max.into() {
+			if state.current_parallelism >= max.get() {
 				return CanRun::False(YieldStrategie::Notify(&self.finish_noftiy));
 			}
 		};
@@ -112,7 +112,7 @@ impl Limiter {
 					state.interval_start = None;
 					state.task_count = 0;
 				} else {
-					if state.task_count >= task_per_interval.task_count.into() {
+					if state.task_count >= task_per_interval.task_count.get() {
 						can_run = false;
 						wait_duration = wait_duration.max(
 							task_per_interval.interval - time_since_interval_start

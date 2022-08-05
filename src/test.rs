@@ -11,8 +11,6 @@ use std::{
 async fn do_nothing() -> () {}
 
 async fn simple_task_per_interval(task_count: usize, task_per_interval: NonZeroUsize, interval: Duration) -> () {
-	let result = 2 + 2;
-	assert_eq!(result, 4);
 	let mut limit = Limiter::new();
 	limit
 		.tasks_per_intervals
@@ -31,5 +29,5 @@ async fn simple_task_per_interval(task_count: usize, task_per_interval: NonZeroU
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn simple_task_per_interval_20000_4000_1s() -> () {
-	simple_task_per_interval(20000, NonZeroUsize::new(400).unwrap(), Duration::from_secs(1)).await;
+	simple_task_per_interval(20000, NonZeroUsize::new(4000).unwrap(), Duration::from_secs(1)).await;
 }
