@@ -94,6 +94,11 @@ impl Limiter {
 			if state.current_parallelism >= max.get() {
 				return CanRun::False(YieldStrategie::Notify(&self.finish_noftiy));
 			}
+			//check if another task can run too, to aviod missing a notify,
+			//because permit was already set and not polled yet before it was set again
+			if state.current_parallelism + 1 < max.get() {
+				self.finish_noftiy.notify_one();
+			}
 		};
 		let mut can_run = true;
 		let mut wait_duration = Duration::ZERO;
